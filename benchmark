@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import timeit
+import shutil
+
+# Benchmark Parameters
+
+methodsPerExtension = 5
+extensionsPerFile = 4
+buildAttemptsToAverage = 3
+fileCountsToTest = [
+    100,
+    500,
+    1000,
+    2500,
+#    5000,
+]
+
+# Run benchmarks
+
+owd = os.getcwd()
+
+def writeFile(name, withExtensions):
+    f = open(f"Sources/TestPackage/{name}.swift", "w")
+    f.write(f"class {name} {{\n")
+    f.write(f"    func main() {{\n")
+    for i in range(extensionsPerFile * methodsPerExtension):
+        f.write(f"        method{i + 1}()\n")
+    f.write(f"    }}\n")
+
+    for i in range(extensionsPerFile):
+        if withExtensions:
+            f.write(f"}}\n")
+            f.write(f"extension {name} {{\n")
+
+        for j in range(methodsPerExtension):
+            methodNumber = (i * methodsPerExtension) + j + 1
+            f.write("\n")
+            f.write(f"    func method{methodNumber}() {{\n")
+            f.write(f"        for i in 0 ..< {methodNumber} {{ print(i + 2) }}; print(\"finished\")\n")
+            f.write(f"    }}\n")
+
+    f.write(f"}}\n")
+
+    f.close()
+
+def generate(fileCount, withExtensions, withMain):
+    if os.path.exists("test-package"):
+        shutil.rmtree("test-package")
+    os.mkdir("test-package")
+    os.chdir("test-package")
+    os.system("swift package init --type executable --name TestPackage >/dev/null")
+
+    main = None
+    if withMain:
+        main = open(f"Sources/TestPackage/main.swift", "w")
+    for i in range(fileCount):
+        writeFile(f"TestClass{i + 1}", withExtensions)
+        if withMain:
+            main.write(f"TestClass{i + 1}().main()\n")
+
+    if withMain:
+        main.close()
+
+    os.chdir(owd)
+
+def time(fileCount, withExtensions, withMain):
+    extensionStrategy = "using extensions" if withExtensions else "without extensions"
+    mainStrategy = "with a main" if withMain else "without a main"
+    print(f"Build Attempt ({extensionStrategy} {mainStrategy})...")
+    print("-----------------------------------------")
+
+    generate(fileCount, withExtensions, withMain)
+
+    os.chdir("test-package")
+    os.system("swift package generate-xcodeproj >/dev/null")
+    os.system("xcodebuild clean >/dev/null")
+
+    start = timeit.default_timer()
+    os.system("xcodebuild >/dev/null")
+    end = timeit.default_timer()
+
+    os.chdir(owd)
+
+    print(end - start)
+    print("-----------------------------------------")
+    return end - start
+
+def benchmark(fileCount):
+    print("\n\n")
+    print(f"Benchmarking {fileCount} files")
+    print("=============================================")
+    yesExtensionsYesMainSum = 0
+    yesExtensionsNoMainSum = 0
+    noExtensionsYesMainSum = 0
+    noExtensionsNoMainSum = 0
+    for i in range(buildAttemptsToAverage):
+        noExtensionsYesMainSum += time(fileCount, False, True)
+        noExtensionsNoMainSum += time(fileCount, False, False)
+        yesExtensionsYesMainSum += time(fileCount, True, True)
+        yesExtensionsNoMainSum += time(fileCount, True, False)
+
+    yesExtensionsYesMainAverage = yesExtensionsYesMainSum / buildAttemptsToAverage
+    yesExtensionsNoMainAverage = yesExtensionsNoMainSum / buildAttemptsToAverage
+    noExtensionsYesMainAverage = noExtensionsYesMainSum / buildAttemptsToAverage
+    noExtensionsNoMainAverage = noExtensionsNoMainSum / buildAttemptsToAverage
+
+    withAverage = withSum / buildAttemptsToAverage
+    withoutAverage = withoutSum / buildAttemptsToAverage
+
+    print(f"Averages for {fileCount} files")
+    print(f"Extensions ( ) Main (x) : {noExtensionsYesMainAverage}")
+    print(f"Extensions ( ) Main ( ) : {noExtensionsNoMainAverage}")
+    print(f"Extensions (x) Main (x) : {yesExtensionsYesMainAverage}")
+    print(f"Extensions (x) Main ( ) : {yesExtensionsNoMainAverage}")
+    print("=============================================")
+
+
+for fileCount in fileCountsToTest:
+    benchmark(fileCount)
