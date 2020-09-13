@@ -20,10 +20,11 @@ typeCountsToTest = [
     1024,
     2048,
     4096,
-    8192,
 ]
 
 # Run benchmarks
+
+buildCommand = "xcodebuild -project Test.xcodeproj -scheme Test"
 
 owd = os.getcwd()
 
@@ -132,7 +133,7 @@ def timeRebuild(typeCount, libCount, withExtensions):
     makeChange(typeCount, libCount, withExtensions)
     os.chdir("test-package")
     start = timeit.default_timer()
-    os.system("xcodebuild >/dev/null")
+    os.system(f"{buildCommand} >/dev/null")
     end = timeit.default_timer()
     os.chdir(owd)
     print(end - start)
@@ -149,10 +150,10 @@ def time(attempt, typeCount, libCount, withExtensions):
 
     os.chdir("test-package")
     os.system("swift package generate-xcodeproj >/dev/null")
-    os.system("xcodebuild clean >/dev/null")
+    os.system(f"{buildCommand} clean >/dev/null")
 
     start = timeit.default_timer()
-    os.system("xcodebuild >/dev/null")
+    os.system(f"{buildCommand} >/dev/null")
     end = timeit.default_timer()
 
     os.chdir(owd)
